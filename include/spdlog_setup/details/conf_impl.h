@@ -26,6 +26,7 @@
 
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/daily_file_sink.h"
+#include "spdlog/sinks/hourly_file_sink.h"
 #include "spdlog/sinks/null_sink.h"
 #include "spdlog/sinks/rotating_file_sink.h"
 #include "spdlog/sinks/sink.h"
@@ -125,6 +126,12 @@ enum class sink_type {
 
     /** Represents daily_file_sink_mt */
     DailyFileSinkMt,
+
+    /** Represents hourly_file_sink_st */
+    HourlyFileSinkSt,
+
+    /** Represents hourly_file_sink_mt */
+    HourlyFileSinkMt,
 
     /** Represents null_sink_st */
     NullSinkSt,
@@ -627,6 +634,8 @@ inline auto sink_type_from_str(const std::string &type) -> sink_type {
         {"rotating_file_sink_mt", sink_type::RotatingFileSinkMt},
         {"daily_file_sink_st", sink_type::DailyFileSinkSt},
         {"daily_file_sink_mt", sink_type::DailyFileSinkMt},
+        {"hourly_file_sink_st", sink_type::HourlyFileSinkSt},
+        {"hourly_file_sink_mt", sink_type::HourlyFileSinkMt},
         {"null_sink_st", sink_type::NullSinkSt},
         {"null_sink_mt", sink_type::NullSinkMt},
 #ifdef SPDLOG_ENABLE_SYSLOG
@@ -850,6 +859,43 @@ auto setup_daily_file_sink(const std::shared_ptr<cpptoml::table> &sink_table)
         base_filename, rotation_hour, rotation_minute);
 }
 
+template <class HourlyFileSink>
+auto setup_hourly_file_sink(const std::shared_ptr<cpptoml::table> &sink_table)
+    -> std::shared_ptr<spdlog::sinks::sink> {
+
+    using names::BASE_FILENAME;
+    using names::MAX_FILES;
+    using names::TRUNCATE;
+
+    // fmt
+    using fmt::format;
+
+    // std
+    using std::make_shared;
+    using std::string;
+
+    const auto base_filename = value_from_table<string>(
+        sink_table,
+        BASE_FILENAME,
+        format(
+            "Missing '{}' field of string value for hourly_file_sink",
+            BASE_FILENAME));
+
+    // must create the directory before creating the sink
+    create_parent_dir_if_present(sink_table, base_filename);
+
+    const auto max_files = value_from_table<uint64_t>(
+        sink_table,
+        MAX_FILES,
+        format(
+            "Missing '{}' field of u64 value for hourly_file_sink", MAX_FILES));
+
+    const auto truncate =
+        value_from_table_or<bool>(sink_table, TRUNCATE, DEFAULT_TRUNCATE);
+
+    return make_shared<HourlyFileSink>(base_filename, truncate, max_files);
+}
+
 #ifdef SPDLOG_ENABLE_SYSLOG
 
 template <class SyslogSink>
@@ -898,6 +944,8 @@ inline auto sink_from_sink_type(
     using spdlog::sinks::basic_file_sink_st;
     using spdlog::sinks::daily_file_sink_mt;
     using spdlog::sinks::daily_file_sink_st;
+    using spdlog::sinks::hourly_file_sink_mt;
+    using spdlog::sinks::hourly_file_sink_st;
     using spdlog::sinks::null_sink_mt;
     using spdlog::sinks::null_sink_st;
     using spdlog::sinks::rotating_file_sink_mt;
@@ -970,6 +1018,12 @@ inline auto sink_from_sink_type(
 
     case sink_type::DailyFileSinkMt:
         return setup_daily_file_sink<daily_file_sink_mt>(sink_table);
+
+    case sink_type::HourlyFileSinkSt:
+        return setup_hourly_file_sink<hourly_file_sink_st>(sink_table);
+
+    case sink_type::HourlyFileSinkMt:
+        return setup_hourly_file_sink<hourly_file_sink_mt>(sink_table);
 
     case sink_type::NullSinkSt:
         return make_shared<null_sink_st>();
